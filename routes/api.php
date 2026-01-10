@@ -2,7 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-
+use App\Http\Controllers\WalletController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -16,4 +16,14 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
+});
+
+
+Route::prefix('wallets/')->controller(WalletController::class)->group(function () {
+    Route::post('/', 'store');
+    Route::get('/{wallet}', 'show');
+    Route::get('/', 'index');
+    Route::post('/{wallet}/deposit','deposit')->middleware('check-idempotency');
+    Route::post('/{wallet}/withdraw','withdraw')->middleware('check-idempotency');
+
 });
