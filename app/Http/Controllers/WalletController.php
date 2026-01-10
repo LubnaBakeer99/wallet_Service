@@ -10,8 +10,6 @@ use App\Services\WalletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Traits\ResponseTrait;
-use App\Http\Resources\TransactionResource;
-
 class WalletController extends Controller
 {
     use ResponseTrait;
@@ -75,21 +73,31 @@ class WalletController extends Controller
         try {
             // Get validated filters
             $filters = $request->validated();
+             
             // Get transaction history with filters
             $transactions = $this->walletService->getTransactionHistory(
                 $wallet,
                 $filters
             );
-            return $this->apiResponse(true,'successful',[
-            'data' => TransactionResource::collection($transactions->items()),
-            'meta' => [
-                'current_page' => $transactions->currentPage(),
-                'per_page'     => $transactions->perPage(),
-                'total'        => $transactions->total(),
-                'last_page'    => $transactions->lastPage(),
+            return $this->apiResponse( true,'successful', $transactions, 200);
+            // Format response
+            return response()->json([
+                'success' => true,
+                'data' => $transactions->map(function ($transaction) {
+                    return $this->formatTransactionForHistory($transaction);
+                }),
+                'meta' => [
+                    'total' => $transactions->total(),
+                    'per_page' => $transactions->perPage(),
+                    'current_page' => $transactions->currentPage(),
+                    'last_page' => $transactions->lastPage(),
+                    'from' => $transactions->firstItem(),
+                    'to' => $transactions->lastItem(),
+                    'has_more_pages' => $transactions->hasMorePages(),
                 ],
-            ],200);
-            } catch (\Exception $e) {
+            ]);
+
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'error' => 'Failed to fetch transaction history',
