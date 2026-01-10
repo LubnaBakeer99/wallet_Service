@@ -6,7 +6,7 @@ use App\Models\{Wallet,Transaction};
 use App\Exceptions\InsufficientBalanceException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-
+use Carbon\Carbon;
 class WalletService
 {
     /**
@@ -44,8 +44,6 @@ class WalletService
                 'last_page' => $wallets->lastPage(),
             ]];
     }
-
-
 
     function deposit(Wallet $wallet,  $amount,  $idempotencyKey)  {
         return DB::transaction(function () use ($wallet, $amount, $idempotencyKey) {
@@ -109,36 +107,12 @@ class WalletService
         ]);
     });
     }
-      public function getTransactionHistory(Wallet $wallet, array $filters = [])
-    {
-        $query = $wallet->transactions()->recentFirst();
-
-        // Apply filters
-        if (isset($filters['type']) && $filters['type'] !== 'all') {
-            $query->where('type', $filters['type']);
-        }
-
-        if (isset($filters['start_date'])) {
-            $query->whereDate('created_at', '>=', $filters['start_date']);
-        }
-
-        if (isset($filters['end_date'])) {
-            $query->whereDate('created_at', '<=', $filters['end_date']);
-        }
-
-        // Pagination
-        $perPage = $filters['per_page'] ?? 15;
-        $page = $filters['page'] ?? 1;
-
-        return $query->paginate($perPage, ['*'], 'page', $page);
-    }
 
     public function transfer(
-        int $fromWalletId,
-        int $toWalletId,
-        float $amount,
-        string $key
-    ){
+        $fromWalletId,
+        $toWalletId,
+        $amount,
+        $key){
         if ($fromWalletId === $toWalletId) {
             throw new \Exception('Self-transfer is not allowed');
         }
@@ -207,6 +181,35 @@ class WalletService
             return [$out, $in];
         });
     }
+
+      public function getTransactionHistory(Wallet $wallet, array $filters = []){
+        // Start with wallet's transactions, newest first
+        $query = $wallet->transactions()->with('relatedWallet')->latest('created_at');
+
+        // Apply type filter
+        if (isset($filters['type']) && $filters['type'] !== 'all') {
+            $query->Type($filters['type']);
+        }
+
+        // Apply date range filter
+        if (isset($filters['start_date'])) {
+            $from = Carbon::parse($filters['start_date'])->startOfDay();
+            $from = Carbon::parse($filters['end_date'])->startOfDay();
+            //$query->where('created_at', '>=', $from);
+             $query->BetweenDates( $filters['start_date'],$filters['end_date']);
+        }
+
+        if (isset($filters['end_date'])) {
+            $query->whereDate('created_at', '<=', $filters['end_date']);
+        }
+
+        // Apply pagination
+        $perPage = $filters['per_page'] ?? 15;
+        $page = $filters['page'] ?? 1;
+
+        return $query->paginate($perPage, ['*'], 'page', $page);
+    }
+
 
 
 }

@@ -24,7 +24,7 @@ class TransferController extends Controller
             $request->amount,
             $key
         );
-       return $this->apiResponse( true, null, $transactions, 200);
+       return $this->apiResponse( true, "Transfer Has been done successfully", $transactions, 200);
     }catch (\App\Exceptions\InsufficientBalanceException $e) {
             return response()->json([
                 'success' => false,

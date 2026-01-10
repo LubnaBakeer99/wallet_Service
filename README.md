@@ -1,66 +1,130 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Wallet Service API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+## Overview
 
-## About Laravel
+This is a **RESTful Wallet Service** implemented in Laravel.  
+It supports **wallet management**, **deposits**, **withdrawals**, **transfers**, and **transaction history**.  
+The service emphasizes **data integrity**, **atomic operations**, and **idempotency**.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Features
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+1. **Wallets**
+   - Create, list, and retrieve wallets
+   - Each wallet has an owner, currency, and balance
 
-## Learning Laravel
+2. **Deposits & Withdrawals**
+   - Idempotent via `Idempotency-Key` header
+   - Deposits add funds, withdrawals reduce funds
+   - Row-level locking ensures concurrent safety
+   - Transactions are recorded
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+3. **Transfers**
+   - Move funds atomically between two wallets
+   - Reject self-transfers and insufficient balance
+   - Idempotent using `Idempotency-Key`
+   - Records two transactions: `transfer_out` and `transfer_in`
+   - Related wallet recorded for each transaction
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+4. **Transaction History**
+   - Returns chronological list of wallet transactions
+   - Filter by type (`deposit`, `withdraw`, `transfer_in`, `transfer_out`) and date range
+   - Paginated
+   - Each transaction includes:
+     - ID
+     - Type
+     - Amount
+     - Wallet
+     - Related wallet (for transfers)
+     - Timestamp
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+---
 
-## Laravel Sponsors
+## Database Design
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### Wallets Table
+| Column      | Type      | Notes                       |
+|------------|----------|----------------------------|
+| id         | bigint   | Primary key                |
+| owner_name | string   | Owner of the wallet        |
+| currency   | string   | Currency code (USD, EUR)   |
+| balance    | decimal  | Current balance            |
+| created_at | datetime | Laravel timestamps         |
+| updated_at | datetime | Laravel timestamps         |
 
-### Premium Partners
+### Transactions Table
+| Column             | Type      | Notes                                    |
+|-------------------|----------|------------------------------------------|
+| id                 | bigint   | Primary key                              |
+| wallet_id          | bigint   | FK to wallets.id                         |
+| related_wallet_id  | bigint   | FK to wallets.id, nullable (for transfers) |
+| type               | string   | deposit, withdraw, transfer_in, transfer_out |
+| amount             | decimal  | Transaction amount                       |
+| idempotency_key    | string   | Ensures idempotent operations           |
+| created_at         | datetime | Laravel timestamps                       |
+| updated_at         | datetime | Laravel timestamps                       |
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+**Constraints**
+- Unique: `(wallet_id, idempotency_key)` → prevents duplicate operations
+- Wallet balance updated atomically within transactions
 
-## Contributing
+---
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## API Endpoints
 
-## Code of Conduct
+| Method | Endpoint | Description |
+|--------|---------|-------------|
+| POST   | /api/v1/wallets | Create a wallet |
+| GET    | /api/v1/wallets | List wallets (optional filters: owner, currency) |
+| GET    | /api/v1/wallets/{id} | Get wallet details |
+| POST   | /api/v1/wallets/{id}/deposit | Deposit funds (idempotent) |
+| POST   | /api/v1/wallets/{id}/withdraw | Withdraw funds (idempotent, checks balance) |
+| POST   | /api/v1/transfers | Transfer funds between wallets (idempotent) |
+| GET    | /api/v1/wallets/{id}/transactions | Transaction history (filters: type, date range, pagination) |
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+---
 
-## Security Vulnerabilities
+## Idempotency
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+- All write operations (deposit, withdraw, transfer) require `Idempotency-Key` header.
+- Duplicate requests with the same key will **return the same transaction** and **do not affect wallet balance**.
+- Enforced via:
+  - Unique constraint in database
+  - Service-layer idempotency checks
 
-## License
+---
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Concurrency & Data Integrity
+
+- Wallet operations use **row-level locking (`lockForUpdate`)** to prevent race conditions
+- All balance changes occur **inside DB transactions**
+- Transfers are **atomic**, either both wallets are updated, or none are
+
+---
+
+## Example JSON Response (Transaction History)
+
+```json
+{
+  "data": [
+    {
+      "id": 20,
+      "type": "transfer_out",
+      "amount": "50.00",
+      "wallet": { "id": 1 },
+      "related_wallet": { "id": 2 },
+      "created_at": "2026-01-10T12:00:00Z"
+    },
+    {
+      "id": 21,
+      "type": "deposit",
+      "amount": "100.00",
+      "wallet": { "id": 1 },
+      "related_wallet": null,
+      "created_at": "2026-01-10T12:05:00Z"
+    }
+  ],
+  "links": {...},
+  "meta": {...}
+}

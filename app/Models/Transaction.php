@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Casts\Attribute;
-
+use Carbon\Carbon;
 class Transaction extends Model
 {
     protected $fillable = [
@@ -50,9 +50,12 @@ class Transaction extends Model
         return $query->where('type', $type);
     }
 
-    public function scopeBetweenDates($query, string $startDate, string $endDate)
+    public function scopeBetweenDates($query,  $startDate,  $endDate)
     {
+        $startDate = Carbon::parse($startDate)->startOfDay();
+        $endDate   = Carbon::parse($endDate)->endOfDay();
         return $query->whereBetween('created_at', [$startDate, $endDate]);
+        // return $query->whereBetween('created_at', [$startDate, $endDate]);
     }
 
     public function scopeRecentFirst($query)
