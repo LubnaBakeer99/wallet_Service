@@ -21,6 +21,10 @@ class WalletService
         ]);
     }
 
+    public function getWallet(int $walletId): Wallet
+    {
+        return Wallet::findOrFail($walletId);
+    }
     function index($request){
         $query = Wallet::query();
         if ($request->has('owner_name')) {
@@ -128,5 +132,81 @@ class WalletService
 
         return $query->paginate($perPage, ['*'], 'page', $page);
     }
+
+    public function transfer(
+        int $fromWalletId,
+        int $toWalletId,
+        float $amount,
+        string $key
+    ){
+        if ($fromWalletId === $toWalletId) {
+            throw new \Exception('Self-transfer is not allowed');
+        }
+        return DB::transaction(function () use (
+            $fromWalletId,
+            $toWalletId,
+            $amount,
+            $key
+        ) {
+
+            // 1- Check idempotency (same key = same transfer)
+            $existing = Transaction::where('idempotency_key', $key)->get();
+            if ($existing->isNotEmpty()) {
+                return $existing->all();
+            }
+
+            // 2- Lock wallets in consistent order (avoid deadlocks)
+            $wallets = Wallet::whereIn('id', [$fromWalletId, $toWalletId])
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            $fromWallet = $wallets[$fromWalletId];
+            $toWallet   = $wallets[$toWalletId];
+
+            //3- Balance check
+            if ($fromWallet->balance < $amount) {
+                throw  new InsufficientBalanceException();
+            }
+            //4- Check same currency
+            if ($fromWallet->currency !== $toWallet->currency) {
+                throw new \Exception('Wallets must have the same currency');
+            }
+            // Get balances before
+            $fromBalanceBefore = $fromWallet->balance;
+            $toBalanceBefore = $toWallet->balance;
+            //5- Apply balance changes
+            $fromWallet->decrement('balance', $amount);
+            $toWallet->increment('balance', $amount);
+
+            // Get balances after
+            $fromBalanceAfter = $fromWallet->fresh()->balance;
+            $toBalanceAfter = $toWallet->fresh()->balance;
+
+            //6- Create transactions
+            $out = Transaction::create([
+                'wallet_id'       => $fromWallet->id,
+                'type'            => 'transfer_out',
+                'amount'          => $amount,
+                'idempotency_key' => $key,
+                'balance_before' => $fromBalanceBefore,
+                'balance_after' => $fromBalanceAfter,
+                'related_wallet_id' => $toWallet->id,
+            ]);
+
+            $in = Transaction::create([
+                'wallet_id'       => $toWallet->id,
+                'type'            => 'transfer_in',
+                'amount'          => $amount,
+                'idempotency_key' => $key,
+                'balance_before' => $toBalanceBefore,
+                'balance_after' => $toBalanceAfter,
+                'related_wallet_id' => $fromWallet->id,
+            ]);
+            return [$out, $in];
+        });
+    }
+
 
 }
