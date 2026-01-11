@@ -1,109 +1,214 @@
-# Wallet Service API
+## 📚 Table of Contents
 
-## Overview
-
-This is a **RESTful Wallet Service** implemented in Laravel.  
-It supports **wallet management**, **deposits**, **withdrawals**, **transfers**, and **transaction history**.  
-The service emphasizes **data integrity**, **atomic operations**, and **idempotency**.
-
----
-
-## Features
-
-1. **Wallets**
-   - Create, list, and retrieve wallets
-   - Each wallet has an owner, currency, and balance
-
-2. **Deposits & Withdrawals**
-   - Idempotent via `Idempotency-Key` header
-   - Deposits add funds, withdrawals reduce funds
-   - Row-level locking ensures concurrent safety
-   - Transactions are recorded
-
-3. **Transfers**
-   - Move funds atomically between two wallets
-   - Reject self-transfers and insufficient balance
-   - Idempotent using `Idempotency-Key`
-   - Records two transactions: `transfer_out` and `transfer_in`
-   - Related wallet recorded for each transaction
-
-4. **Transaction History**
-   - Returns chronological list of wallet transactions
-   - Filter by type (`deposit`, `withdraw`, `transfer_in`, `transfer_out`) and date range
-   - Paginated
-   - Each transaction includes:
-     - ID
-     - Type
-     - Amount
-     - Wallet
-     - Related wallet (for transfers)
-     - Timestamp
+- [📌 Project Goals](#-project-goals)
+- [⚙️ Tech Stack](#️-tech-stack)
+- [🧱 System Architecture](#-system-architecture)
+- [📂 Project Folder Structure](#-project-folder-structure)
+- [🗄️ Database Design](#️-database-design)
+  - [🪪 Wallets Table](#-wallets-table)
+  - [🧾 Transactions Table](#-transactions-table)
+- [🔁 Idempotency](#-idempotency)
+- [🔐 Data Integrity & Concurrency](#-data-integrity--concurrency)
+- [🌐 API Endpoints](#-api-endpoints)
+  - [🪪 Wallet Management](#-wallet-management)
+  - [💰 Deposits](#-deposits)
+  - [💸 Withdrawals](#-withdrawals)
+  - [🔄 Transfers](#-transfers)
+  - [📜 Transaction History](#-transaction-history)
+- [❤️ Health Check](#️-health-check)
+- [🧪 Testing](#-testing)
+- [🧠 Notes for Interviewers](#-notes-for-interviewers)
+- [🚀 Conclusion](#-conclusion)
 
 ---
 
-## Database Design
+## 📌 Project Goals
 
-### Wallets Table
-| Column      | Type      | Notes                       |
-|------------|----------|----------------------------|
-| id         | bigint   | Primary key                |
-| owner_name | string   | Owner of the wallet        |
-| currency   | string   | Currency code (USD, EUR)   |
-| balance    | decimal  | Current balance            |
-| created_at | datetime | Laravel timestamps         |
-| updated_at | datetime | Laravel timestamps         |
-
-### Transactions Table
-| Column             | Type      | Notes                                    |
-|-------------------|----------|------------------------------------------|
-| id                 | bigint   | Primary key                              |
-| wallet_id          | bigint   | FK to wallets.id                         |
-| related_wallet_id  | bigint   | FK to wallets.id, nullable (for transfers) |
-| type               | string   | deposit, withdraw, transfer_in, transfer_out |
-| amount             | decimal  | Transaction amount                       |
-| idempotency_key    | string   | Ensures idempotent operations           |
-| created_at         | datetime | Laravel timestamps                       |
-| updated_at         | datetime | Laravel timestamps                       |
-
-**Constraints**
-- Unique: `(wallet_id, idempotency_key)` → prevents duplicate operations
-- Wallet balance updated atomically within transactions
+- Demonstrate production-ready backend design
+- Ensure atomic financial operations
+- Prevent duplicate processing using idempotency
+- Handle concurrent requests safely
+- Provide clear, well-documented APIs
 
 ---
 
-## API Endpoints
+## ⚙️ Tech Stack
 
-| Method | Endpoint | Description |
-|--------|---------|-------------|
-| POST   | /api/v1/wallets | Create a wallet |
-| GET    | /api/v1/wallets | List wallets (optional filters: owner, currency) |
-| GET    | /api/v1/wallets/{id} | Get wallet details |
-| POST   | /api/v1/wallets/{id}/deposit | Deposit funds (idempotent) |
-| POST   | /api/v1/wallets/{id}/withdraw | Withdraw funds (idempotent, checks balance) |
-| POST   | /api/v1/transfers | Transfer funds between wallets (idempotent) |
-| GET    | /api/v1/wallets/{id}/transactions | Transaction history (filters: type, date range, pagination) |
+- PHP 8+
+- Laravel
+- MySQL / PostgreSQL
+- REST API
+
+---
+## 📂 Project Folder Structure
+my-wallet-service/
+├─ app/
+│ ├─ Http/
+│ │ ├─ Controllers/
+│ │ │ ├─ WalletController.php
+│ │ │ ├─ TransactionController.php
+│ │ │ └─ TransferController.php
+│ │ ├─ Middleware/
+│ │ │ └─ RequireIdempotencyKey.php
+│ │ └─ Requests/
+│ │ ├─ DepositRequest.php
+│ │ ├─ WithdrawRequest.php
+│ │ └─ TransferRequest.php
+│ ├─ Models/
+│ │ ├─ Wallet.php
+│ │ └─ Transaction.php
+│ └─ Services/
+│ └─ WalletService.php
+├─ database/
+│ ├─ migrations/
+│ │ ├─ create_wallets_table.php
+│ │ └─ create_transactions_table.php
+│ └─ seeders/
+├─ routes/
+│ └─ api.php
+├─ assets/
+│ └─ erd.png
+├─ tests/
+│ ├─ Feature/
+│ └─ Unit/
+├─ README.md
+├─ composer.json
+└─ .env.example
+
+## 🧱 System Architecture
+Controller → Service → Model → Database
+- Controllers handle HTTP requests
+- Services contain business logic
+- Models define relationships and scopes
+- Database transactions ensure data integrity
 
 ---
 
-## Idempotency
+## 🗄️ Database Design
+## 🧱 ER Diagram
 
-- All write operations (deposit, withdraw, transfer) require `Idempotency-Key` header.
-- Duplicate requests with the same key will **return the same transaction** and **do not affect wallet balance**.
-- Enforced via:
-  - Unique constraint in database
-  - Service-layer idempotency checks
+![Wallet Service ERD](assets/erd.png)
+
+### 🪪 Wallets Table
+
+| Column | Type | Description |
+|------|------|------------|
+| id | bigint | Primary key |
+| owner_name | string | Wallet owner |
+| currency | string | Currency code |
+| balance | decimal(15,2) | Current balance |
+| created_at | datetime | Timestamp |
+| updated_at | datetime | Timestamp |
 
 ---
 
-## Concurrency & Data Integrity
+### 🧾 Transactions Table
 
-- Wallet operations use **row-level locking (`lockForUpdate`)** to prevent race conditions
-- All balance changes occur **inside DB transactions**
-- Transfers are **atomic**, either both wallets are updated, or none are
+| Column | Type | Description |
+|------|------|------------|
+| id | bigint | Primary key |
+| wallet_id | bigint | FK → wallets.id |
+| related_wallet_id | bigint | FK → wallets.id (nullable) |
+| type | string | deposit, withdraw, transfer_in, transfer_out |
+| amount | decimal(15,2) | Transaction amount |
+| balance_before | decimal(15,2) | Balance before transaction |
+| balance_after | decimal(15,2) | Balance after transaction |
+| idempotency_key | string | Prevents duplicate processing |
+| created_at | datetime | Timestamp |
+| updated_at | datetime | Timestamp |
 
 ---
 
-## Example JSON Response (Transaction History)
+## 🔁 Idempotency
+
+All money-changing operations require an `Idempotency-Key` header.
+
+- The client generates a unique key
+- Repeated requests with the same key are processed only once
+- Prevents duplicate deposits, withdrawals, and transfers
+## 🔐 Data Integrity & Concurrency
+
+- All financial operations run inside database transactions
+- Wallet rows are locked to prevent race conditions
+- Transfers debit and credit wallets atomically
+- Wallet balances never go negative
+## 🌐 API Endpoints
+
+Below are the main API endpoints. See the controllers in `app/Http/Controllers` for exact request/response shapes and validation rules.
+
+### Wallets
+
+- Create wallet
+  - **Endpoint:** `POST /api/wallets`
+  - **Description:** Create a new wallet
+  - **Request body**:
+
+```json
+{
+  "owner_name": "John Doe",
+  "currency": "USD"
+}
+```
+
+- List wallets
+  - **Endpoint:** `GET /api/wallets`
+  - **Query params (optional):** `owner_name`, `currency`, `page`, `per_page`
+
+- Get wallet
+  - **Endpoint:** `GET /api/wallets/{id}`
+
+### Deposits
+
+- Deposit funds (idempotent)
+  - **Endpoint:** `POST /api/wallets/{id}/deposit`
+  - **Headers:** `Idempotency-Key: <unique-key>`
+  - **Request body**:
+
+```json
+{
+  "amount": "100.00"
+}
+```
+
+### Withdrawals
+
+- Withdraw funds (idempotent)
+  - **Endpoint:** `POST /api/wallets/{id}/withdraw`
+  - **Headers:** `Idempotency-Key: <unique-key>`
+  - **Request body**:
+
+```json
+{
+  "amount": "50.00"
+}
+```
+
+### Transfers
+
+- Transfer between wallets (idempotent)
+  - **Endpoint:** `POST /api/transfers`
+  - **Headers:** `Idempotency-Key: <unique-key>`
+  - **Request body**:
+
+```json
+{
+  "from_wallet_id": 1,
+  "to_wallet_id": 2,
+  "amount": "25.00"
+}
+```
+
+Notes:
+- Transfers must be between wallets with the same currency.
+- Self-transfers are rejected.
+
+### Transaction history
+
+- Get transactions for a wallet
+  - **Endpoint:** `GET /api/wallets/{id}/transactions`
+  - **Query params (optional):** `type` (deposit, withdraw, transfer_in, transfer_out), `from` (ISO date), `to` (ISO date), `page`, `per_page`
+
+Example transaction response snippet (paginated):
 
 ```json
 {
@@ -115,16 +220,10 @@ The service emphasizes **data integrity**, **atomic operations**, and **idempote
       "wallet": { "id": 1 },
       "related_wallet": { "id": 2 },
       "created_at": "2026-01-10T12:00:00Z"
-    },
-    {
-      "id": 21,
-      "type": "deposit",
-      "amount": "100.00",
-      "wallet": { "id": 1 },
-      "related_wallet": null,
-      "created_at": "2026-01-10T12:05:00Z"
     }
   ],
-  "links": {...},
-  "meta": {...}
+  "links": { /* pagination links */ },
+  "meta": { /* pagination meta */ }
 }
+```
+

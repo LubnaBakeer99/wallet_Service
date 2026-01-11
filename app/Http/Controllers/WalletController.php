@@ -28,6 +28,14 @@ class WalletController extends Controller
          return $this->apiResponse( true, null, $wallet, 200);
     }
 
+    function showBalamce(Wallet $wallet){
+      return $this->apiResponse( true, null, [
+            'wallet_id' => $wallet->id,
+            'currency'  => $wallet->currency,
+            'balance'   => $wallet->balance,
+        ], 200);
+    }
+
 
     public function index(Request $request): JsonResponse
     {
@@ -73,7 +81,7 @@ class WalletController extends Controller
         try {
             // Get validated filters
             $filters = $request->validated();
-             
+
             // Get transaction history with filters
             $transactions = $this->walletService->getTransactionHistory(
                 $wallet,
@@ -105,6 +113,8 @@ class WalletController extends Controller
             ], 500);
         }
     }
+
+
 
 
 }

@@ -24,6 +24,7 @@ Route::prefix('wallets/')->controller(WalletController::class)->group(function (
     Route::get('/{wallet}', 'show');
     Route::get('/', 'index');
     Route::get('/{wallet}/transactions', 'getTransactionHistory');
+    Route::get('/{wallet}/balance' ,'showBalamce');
     Route::post('/{wallet}/deposit','deposit')->middleware('check-idempotency');
     Route::post('/{wallet}/withdraw','withdraw')->middleware('check-idempotency');
 
