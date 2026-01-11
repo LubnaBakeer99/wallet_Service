@@ -31,6 +31,6 @@ Route::prefix('wallets/')->controller(WalletController::class)->group(function (
 });
 
 
-Route::prefix('transfer')->middleware('check-idempotency')->group(function () {
+Route::prefix('wallets/transfer')->middleware('check-idempotency')->group(function () {
 Route::post('/', [TransferController::class, 'transfer']);
 });

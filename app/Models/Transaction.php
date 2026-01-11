@@ -29,7 +29,7 @@ class Transaction extends Model
     protected static function booted(): void
     {
         static::creating(function ($transaction) {
-            $transaction->uuid = \Str::uuid();
+        $transaction->uuid = \Str::uuid();
         });
     }
 

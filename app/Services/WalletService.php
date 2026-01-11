@@ -7,6 +7,7 @@ use App\Exceptions\InsufficientBalanceException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
+use App\Enums\TransactionTypes;
 class WalletService
 {
     /**
@@ -64,7 +65,7 @@ class WalletService
             //4- Record transaction
             return Transaction::create([
                 'wallet_id' => $lockedWallet->id,
-                'type' => 'deposit',
+                'type' => TransactionTypes::DEPOSIT,
                 'amount' => $amount,
                 'balance_before' => $balanceBefore,
                 'balance_after' => $lockedWallet->balance,
@@ -99,7 +100,7 @@ class WalletService
         //5- Create and return the transaction
         return Transaction::create([
             'wallet_id'        => $lockedWallet->id,
-            'type'             => 'withdraw',
+            'type'             => TransactionTypes::WITHDRAW,
             'amount' => $amount,
             'balance_before' => $balanceBefore,
             'balance_after' => $lockedWallet->balance,
@@ -161,7 +162,7 @@ class WalletService
             //6- Create transactions
             $out = Transaction::create([
                 'wallet_id'       => $fromWallet->id,
-                'type'            => 'transfer_out',
+                'type'            => TransactionTypes::TRANSFER_OUT,
                 'amount'          => $amount,
                 'idempotency_key' => $key,
                 'balance_before' => $fromBalanceBefore,
@@ -171,7 +172,7 @@ class WalletService
 
             $in = Transaction::create([
                 'wallet_id'       => $toWallet->id,
-                'type'            => 'transfer_in',
+                'type'            => TransactionTypes::TRANSFER_IN,
                 'amount'          => $amount,
                 'idempotency_key' => $key,
                 'balance_before' => $toBalanceBefore,
